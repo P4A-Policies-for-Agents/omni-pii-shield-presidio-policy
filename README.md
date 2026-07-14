@@ -208,6 +208,48 @@ rules:
     action: redact
 ```
 
+## Supported entity types
+
+**The policy is entity-agnostic.** Both the `entities` property and a rule's
+`entityType` are free-form strings forwarded straight to Presidio's `/analyze`
+(`entityType` additionally supports globs like `US_*` or `*`). So the exact set
+of types you can detect and act on is **defined by your co-deployed Presidio
+Analyzer, not by this policy.** Leaving `entities: []` requests *all* types the
+analyzer supports.
+
+The authoritative live list for any deployment is whatever
+`GET {analyzerUrl}/supportedentities` returns.
+
+### Presidio defaults (stock image)
+
+A stock Presidio Analyzer recognizes the following out of the box:
+
+| Scope | Entity types |
+|---|---|
+| **Global** | `CREDIT_CARD`, `CRYPTO`, `DATE_TIME`, `EMAIL_ADDRESS`, `IBAN_CODE`, `IP_ADDRESS`, `NRP`, `LOCATION`, `PERSON`, `PHONE_NUMBER`, `MEDICAL_LICENSE`, `URL` |
+| **USA** | `US_BANK_NUMBER`, `US_DRIVER_LICENSE`, `US_ITIN`, `US_PASSPORT`, `US_SSN` |
+| **UK** | `UK_NHS`, `UK_NINO` |
+| **Spain** | `ES_NIF`, `ES_NIE` |
+| **Italy** | `IT_FISCAL_CODE`, `IT_DRIVER_LICENSE`, `IT_VAT_CODE`, `IT_PASSPORT`, `IT_IDENTITY_CARD` |
+| **Poland** | `PL_PESEL` |
+| **Singapore** | `SG_NRIC_FIN`, `SG_UEN` |
+| **Australia** | `AU_ABN`, `AU_ACN`, `AU_TFN`, `AU_MEDICARE` |
+| **India** | `IN_PAN`, `IN_AADHAAR`, `IN_VEHICLE_REGISTRATION`, `IN_VOTER`, `IN_PASSPORT` |
+| **Finland** | `FI_PERSONAL_IDENTITY_CODE` |
+
+### Beyond the defaults
+
+Because detection tuning is forwarded to Presidio, you can also match types that
+aren't in the list above:
+
+- **Custom recognizers baked into the Presidio image** — extra NER models, other
+  languages, or no-code YAML recognizers. Transparent to the policy; just
+  reference the entity name in `entities` / a rule `entityType`.
+- **Ad-hoc recognizers** supplied via the policy's `adHocRecognizers` config
+  (inline regex / deny-list) for org-specific IDs like employee numbers or
+  contract IDs — no image rebuild. Reference whatever entity name you assign in a
+  rule's `entityType`.
+
 ## Build & test
 
 ```bash
