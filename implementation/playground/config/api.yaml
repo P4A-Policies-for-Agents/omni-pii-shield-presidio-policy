@@ -1,0 +1,41 @@
+apiVersion: gateway.mulesoft.com/v1alpha1
+kind: ApiInstance
+metadata:
+  name: pii-shield-playground
+spec:
+  address: http://0.0.0.0:8081
+  services:
+    upstream:
+      address: http://backend:80
+      routes:
+        - config:
+            destinationPath: /
+  policies:
+    - policyRef:
+        # `make run` patches name/namespace to the built policy ref.
+        name: pii-shield-presidio-policy-impl
+      config:
+        analyzerUrl: http://presidio-analyzer:3000
+        anonymizerUrl: http://presidio-anonymizer:3000
+        # Safe-by-default rollout: observe everywhere, redact emails +
+        # phone numbers, block payment data outright.
+        defaultAction: audit
+        language: en
+        scoreThreshold: 0.5
+        rules:
+          - entityType: CREDIT_CARD
+            action: block
+          - entityType: IBAN_CODE
+            action: block
+          - entityType: EMAIL_ADDRESS
+            action: redact
+            operator:
+              kind: replace
+              newValue: "<EMAIL_ADDRESS>"
+          - entityType: PHONE_NUMBER
+            action: redact
+            operator:
+              kind: mask
+              maskingChar: "*"
+              charsToMask: 6
+              fromEnd: true

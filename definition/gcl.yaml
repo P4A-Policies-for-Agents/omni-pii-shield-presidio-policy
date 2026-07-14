@@ -1,0 +1,252 @@
+---
+apiVersion: gateway.mulesoft.com/v1alpha1
+kind: Extension
+metadata:
+  labels:
+    title: PII Shield via Presidio
+    description: |
+      Detects, redacts, or blocks PII in-flight by delegating detection and
+      anonymization to a co-deployed Presidio Analyzer/Anonymizer service.
+      Protocol-aware across the agentic asset types Omni Gateway governs —
+      MCP `tools/call`, A2A message/task traffic (V1 + Legacy bindings,
+      including SSE streaming), and LLM completions — plus generic JSON APIs.
+      Ordered first-match rules bind detected entity types to an action
+      (`audit`, `redact`, `block`) with an optional Anypoint-identity
+      audience filter. Empty ruleset with `defaultAction: audit` is an
+      observability-only, pass-through deployment.
+    category: Security
+    metadata/interfaceScope: api,resource
+    metadata/capabilities/injectionPoint: inbound
+    metadata/capabilities/assetTypes: mcp,a2a,llm,api
+spec:
+  extends:
+    - name: extension-definition
+      namespace: default
+  properties:
+    # ----------------------------------------------------------------
+    # Presidio services (co-deployed Docker sidecar / cluster service).
+    # ----------------------------------------------------------------
+    analyzerUrl:
+      type: string
+      format: service
+      description: |
+        Base URL of the Presidio Analyzer service. The policy POSTs
+        extracted text to `{analyzerUrl}/analyze`.
+    anonymizerUrl:
+      type: string
+      format: service
+      default: ""
+      description: |
+        Base URL of the Presidio Anonymizer service. Required only when a
+        `redact` rule sets `operator.serverSide: true`; otherwise redaction
+        is spliced locally from analyzer offsets (no second round trip).
+
+    # ----------------------------------------------------------------
+    # Traffic scoping.
+    # ----------------------------------------------------------------
+    assetTypes:
+      type: array
+      default: []
+      description: |
+        Which traffic classes to inspect (`mcp`, `a2a`, `llm`, `generic`).
+        Empty = all. Others pass through untouched.
+      items:
+        type: string
+        enum:
+          - mcp
+          - a2a
+          - llm
+          - generic
+    direction:
+      type: string
+      enum:
+        - request
+        - response
+        - both
+      default: both
+      description: Which legs to inspect.
+    scanDataParts:
+      type: boolean
+      default: false
+      description: |
+        A2A only — also scan `DataPart` structured payloads as generic JSON
+        string leaves. `FilePart` entries are never scanned in v1.
+
+    # ----------------------------------------------------------------
+    # Detection tuning (forwarded to Presidio /analyze).
+    # ----------------------------------------------------------------
+    entities:
+      type: array
+      default: []
+      description: |
+        Presidio entity types to request (`EMAIL_ADDRESS`, `PHONE_NUMBER`,
+        `CREDIT_CARD`, `IBAN_CODE`, `PERSON`, `LOCATION`, ...). Empty = all.
+      items:
+        type: string
+    scoreThreshold:
+      type: number
+      minimum: 0.0
+      maximum: 1.0
+      default: 0.5
+      description: Minimum analyzer confidence to act on.
+    language:
+      type: string
+      default: en
+      description: Analyzer language (must be loaded in the Presidio container).
+    allowList:
+      type: array
+      default: []
+      description: Exact values never treated as PII (Presidio `allow_list`).
+      items:
+        type: string
+    contextWords:
+      type: array
+      default: []
+      description: |
+        Outer context words passed to the analyzer to boost weak-pattern
+        confidence (Presidio context-enhancement mechanism).
+      items:
+        type: string
+    adHocRecognizers:
+      type: array
+      default: []
+      description: |
+        Inline regex / deny-list recognizers forwarded to `/analyze` as
+        `ad_hoc_recognizers` — org-specific IDs with zero image rebuilds.
+      items:
+        type: object
+
+    # ----------------------------------------------------------------
+    # Scan targeting / limits.
+    # ----------------------------------------------------------------
+    scanTargets:
+      type: array
+      default: []
+      description: |
+        JSONPath expressions that override auto-classification: scan only
+        these body paths. Empty = auto (protocol-aware).
+      items:
+        type: string
+    maxBodyBytes:
+      type: integer
+      minimum: 0
+      default: 262144
+      description: Bodies larger than this skip inspection per oversizePosture.
+    oversizePosture:
+      type: string
+      enum:
+        - pass
+        - block
+      default: pass
+      description: What to do with a body larger than maxBodyBytes.
+
+    # ----------------------------------------------------------------
+    # Action rules (ordered, first-match-wins per detected entity).
+    # ----------------------------------------------------------------
+    defaultAction:
+      type: string
+      enum:
+        - audit
+        - redact
+        - block
+      default: audit
+      description: Action for detected entities that match no rule.
+    rules:
+      type: array
+      default: []
+      description: Ordered first-match-wins entity rules.
+      items:
+        type: object
+        properties:
+          entityType:
+            type: string
+            description: Exact entity type or glob (e.g. `US_*`, `*`).
+          assetType:
+            type: string
+            enum:
+              - mcp
+              - a2a
+              - llm
+              - generic
+            description: Restrict this rule to one asset class (default any).
+          direction:
+            type: string
+            enum:
+              - request
+              - response
+            description: Restrict this rule to one leg (default any).
+          audienceType:
+            type: string
+            enum:
+              - client
+              - scope
+            description: |
+              Match against the Anypoint `Authentication` injectable only —
+              caller `client` id, or presence of an OAuth `scope`.
+          audienceValue:
+            type: string
+            description: Value to match for `audienceType`.
+          action:
+            type: string
+            enum:
+              - audit
+              - redact
+              - block
+            default: audit
+          operator:
+            type: object
+            description: For `redact` — how to rewrite the span.
+            properties:
+              kind:
+                type: string
+                enum:
+                  - replace
+                  - mask
+                  - hash
+                  - redact
+                default: replace
+              newValue:
+                type: string
+                description: replace — substitute text (default `<ENTITY_TYPE>`).
+              maskingChar:
+                type: string
+                default: "*"
+              charsToMask:
+                type: integer
+                default: 0
+                description: mask — number of chars to mask (0 = all).
+              fromEnd:
+                type: boolean
+                default: false
+                description: mask — mask from the end of the span.
+              serverSide:
+                type: boolean
+                default: false
+                description: |
+                  Delegate this operator to the Presidio Anonymizer service
+                  (requires anonymizerUrl) instead of splicing locally.
+        required:
+          - entityType
+          - action
+
+    # ----------------------------------------------------------------
+    # Failure behaviour.
+    # ----------------------------------------------------------------
+    failurePosture:
+      type: string
+      enum:
+        - open
+        - closed
+      default: open
+      description: |
+        What to do when Presidio is unreachable / times out. `open` =
+        pass through unscanned (WARN + `X-PII-Scan: skipped`). `closed` =
+        reject with a surface-appropriate error.
+    presidioTimeoutMs:
+      type: integer
+      minimum: 25
+      maximum: 30000
+      default: 1500
+      description: Per-call analyzer / anonymizer timeout.
+  required:
+    - analyzerUrl

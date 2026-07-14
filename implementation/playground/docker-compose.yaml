@@ -1,0 +1,35 @@
+# Local playground: Omni/Flex Gateway in front of a JSON backend, with a
+# co-deployed Presidio Analyzer (+ Anonymizer) sidecar the policy calls.
+#
+#   caller ──► flex-gateway :8081 ──► backend (httpbin)
+#                    │
+#                    └── POST http://presidio-analyzer:3000/analyze
+#                    └── POST http://presidio-anonymizer:3000/anonymize
+#
+# `make run` copies the built policy into ./config/custom-policies and
+# boots this stack. Point your MCP / A2A / LLM client at :8081.
+version: "3.8"
+
+services:
+  flex-gateway:
+    image: mulesoft/flex-gateway:1.9.0
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./config:/usr/local/share/mulesoft/flex-gateway/conf.d/
+    depends_on:
+      - backend
+      - presidio-analyzer
+
+  backend:
+    image: kennethreitz/httpbin
+
+  presidio-analyzer:
+    image: mcr.microsoft.com/presidio-analyzer:latest
+    ports:
+      - "5002:3000"
+
+  presidio-anonymizer:
+    image: mcr.microsoft.com/presidio-anonymizer:latest
+    ports:
+      - "5001:3000"

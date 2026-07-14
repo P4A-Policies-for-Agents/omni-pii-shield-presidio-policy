@@ -1,0 +1,12 @@
+apiVersion: gateway.mulesoft.com/v1alpha1
+kind: Configuration
+metadata:
+  name: logging-config
+spec:
+  logging:
+    outputs:
+      - type: stdout
+    logLevels:
+      root: info
+      # Turn up to `debug` to see per-leg pass-through evidence lines.
+      # pii_shield_presidio_policy: debug
