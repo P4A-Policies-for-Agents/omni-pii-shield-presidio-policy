@@ -1,8 +1,10 @@
 # PII Shield via Presidio — Omni Gateway PDK Policy
 
 Detects, redacts, or blocks PII **in-flight** by delegating detection and
-anonymization to a co-deployed [Presidio](https://github.com/data-privacy-stack/presidio)
-Analyzer/Anonymizer service. Protocol-aware across the agentic asset types
+anonymization to a [Presidio](https://github.com/data-privacy-stack/presidio)
+Analyzer/Anonymizer service — co-deployed as a sidecar, or remotely hosted
+(e.g. on [Railway](https://railway.com)) and reached via a same-gateway
+loopback. Protocol-aware across the agentic asset types
 MuleSoft **Omni Gateway** governs — **MCP** `tools/call`, **A2A** message/task
 traffic (V1 + Legacy bindings, including SSE streaming), and **LLM**
 completions — plus generic JSON APIs.
@@ -161,8 +163,10 @@ properties:
 
 | Property | Default | Description |
 |---|---|---|
-| `analyzerUrl` (required) | — | Presidio Analyzer base URL (`format: service`). |
+| `analyzerUrl` (required) | — | Presidio Analyzer base URL (`format: service`). On a managed gateway, the gateway's own loopback listener (see Deployment). |
 | `anonymizerUrl` | `""` | Presidio Anonymizer URL; only needed for `operator.serverSide`. |
+| `analyzerPathPrefix` | `""` | Managed-gateway loopback prefix (e.g. `/presidio-analyzer-pin`); prepended to `/analyze` so the call re-enters a same-gateway passthrough route. Empty = direct call. See Deployment. |
+| `anonymizerPathPrefix` | `""` | Loopback prefix for the Anonymizer (see `analyzerPathPrefix`). |
 | `assetTypes` | all | `mcp` \| `a2a` \| `llm` \| `generic` to inspect. |
 | `direction` | `both` | `request` \| `response` \| `both`. |
 | `scanDataParts` | `false` | A2A: also scan `DataPart` JSON leaves. |
@@ -220,11 +224,54 @@ mirrors that output so `cargo test` works without the codegen step.
 
 ## Deployment shape
 
-Presidio Analyzer (+ optionally Anonymizer) runs as Docker containers next to
-the gateway (sidecar, same host, or cluster service) — the deployment model
-Presidio ships via its `docker-compose.yml`. The
-[`playground/`](implementation/playground) wires a local Flex Gateway,
+Presidio Analyzer (+ optionally Anonymizer) is a pair of small Dockerized REST
+services. Where they run — and how the policy addresses them — depends on the
+gateway.
+
+### Self-managed / local Flex Gateway (direct)
+
+Run Presidio as a sidecar / same-host / cluster service (the model Presidio
+ships via its `docker-compose.yml`). Point the policy straight at it and leave
+the path-prefix properties empty:
+
+```yaml
+analyzerUrl: http://presidio-analyzer:3000
+anonymizerUrl: http://presidio-anonymizer:3000   # only for operator.serverSide
+```
+
+The [`playground/`](implementation/playground) wires a local Flex Gateway,
 Presidio Analyzer + Anonymizer, and a JSON backend for `make run`.
+
+### Managed Omni Gateway (CloudHub 2.0) with Presidio hosted remotely (e.g. Railway)
+
+Managed Omni gateways rewrite the egress `Host` header on policy-originated
+outbound calls, so the policy cannot reliably call an arbitrary external
+Presidio URL directly. The `analyzerPathPrefix` / `anonymizerPathPrefix`
+properties work around this with a **same-gateway loopback**:
+
+1. **Host Presidio** anywhere reachable over HTTPS — e.g. two Railway services
+   deployed from [`presidio-railway`](https://railway.com):
+   - Analyzer: `https://presidio-railway-production.up.railway.app`
+   - Anonymizer: `https://presidio-railway-anonymizer-production.up.railway.app`
+2. **Publish a passthrough route** on the *same* gateway per service, whose base
+   path is the prefix (e.g. `/presidio-analyzer-pin`) and whose upstream is the
+   Railway URL, with `auto_host_rewrite` so the real Presidio `Host` is restored
+   on the way out.
+3. **Point the policy at the gateway's internal listener** and set the prefix:
+
+```yaml
+analyzerUrl: http://127.0.0.1:8081
+analyzerPathPrefix: /presidio-analyzer-pin
+anonymizerUrl: http://127.0.0.1:8081            # only for operator.serverSide
+anonymizerPathPrefix: /presidio-anonymizer-pin
+presidioTimeoutMs: 5000                          # remote hop + cold starts
+```
+
+The policy then POSTs to
+`http://127.0.0.1:8081/presidio-analyzer-pin/analyze`, which the passthrough
+route forwards out to Railway. Presidio's REST APIs are unauthenticated, so put
+an API-key/mTLS proxy in front of the public Railway endpoints (or restrict
+inbound) before routing production traffic.
 
 ## Scope notes / v1 limits
 
@@ -237,12 +284,12 @@ Presidio Analyzer + Anonymizer, and a JSON backend for `make run`.
   perimeter, not a compliance silver bullet.
 - **Runtime note.** The request leg calls Presidio after buffering the request
   body. This is the standard "gateway as PII boundary" flow and works on
-  self-managed / self-hosted Flex Gateway (including the playground). Some
-  managed Omni Gateway environments restrict policy-originated outbound HTTP
-  once the request body phase has started; deploy Presidio as a reachable
-  sidecar/service accordingly.
+  self-managed / self-hosted Flex Gateway (including the playground). Managed
+  Omni Gateway environments (e.g. CloudHub 2.0) rewrite the egress `Host` on
+  policy-originated outbound calls, so reach a remote Presidio via the
+  `analyzerPathPrefix` / `anonymizerPathPrefix` same-gateway loopback (see
+  Deployment) rather than pointing `analyzerUrl` at the external host directly.
 - On the response leg the body is rewritten (or, on `block`, replaced with an
   error envelope) but the upstream `:status` is preserved — the body-only
   fail-closed constraint of this runtime. The security property (no PII bytes
   leave) holds regardless.
-```

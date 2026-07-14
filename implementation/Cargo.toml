@@ -12,7 +12,7 @@ crate-type = ["cdylib", "rlib"]
 group_id = "82a0453b-22e6-430d-bbf4-35b989d043dc"
 # The Anypoint Exchange CLI rejects asset ids whose hyphen-separated
 # segments mix letters and digits, so keep every segment purely alphabetic.
-definition_asset_id = "pii-shield-presidio-policy"
+definition_asset_id = { name = "pii-shield-presidio-policy", version = "0.2.0" }
 implementation_asset_id = "pii-shield-presidio-policy-impl"
 
 [dependencies]
