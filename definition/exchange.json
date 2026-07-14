@@ -1,5 +1,6 @@
 {
   "main": "gcl.yaml",
+  "assetId": "pii-shield-presidio-policy",
   "name": "PII Shield via Presidio",
   "classifier": "policy-definition",
   "tags": ["pii", "presidio", "mcp", "a2a", "llm", "security", "gdpr", "hipaa", "pci"]
