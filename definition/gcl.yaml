@@ -5,11 +5,10 @@ metadata:
   labels:
     title: PII Shield via Presidio
     description: >-
-      Protocol-aware PII control for Omni Gateway. Delegates detection and
-      anonymization to a Presidio service — co-deployed as a sidecar or
-      remotely hosted (e.g. on Railway) — across MCP, A2A, LLM, and generic
-      JSON. Rules audit, redact, or block entities, with an optional Anypoint
-      identity audience filter.
+      Protocol-aware PII control for Omni Gateway: delegates detection and
+      anonymization to a Presidio service (sidecar or remote) across MCP, A2A,
+      LLM, and generic JSON. Rules audit, redact, or block entities, with
+      optional identity-audience scoping.
     category: Security
     metadata/interfaceScope: api,resource
     metadata/capabilities/injectionPoint: inbound
