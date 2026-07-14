@@ -2,7 +2,7 @@
   "main": "gcl.yaml",
   "groupId": "82a0453b-22e6-430d-bbf4-35b989d043dc",
   "assetId": "pii-shield-presidio-policy",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "name": "PII Shield via Presidio",
   "classifier": "policy-definition",
   "tags": ["pii", "presidio", "mcp", "a2a", "llm", "security", "gdpr", "hipaa", "pci"]

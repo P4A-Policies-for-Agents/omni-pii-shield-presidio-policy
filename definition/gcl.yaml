@@ -128,6 +128,40 @@ spec:
         `ad_hoc_recognizers` — org-specific IDs with zero image rebuilds.
       items:
         type: object
+        additionalProperties: true
+        properties:
+          name:
+            type: string
+            description: Recognizer name.
+          supportedEntity:
+            type: string
+            description: Entity type this recognizer produces (e.g. `ORG_ID`).
+          supportedLanguage:
+            type: string
+            description: Language the recognizer applies to (default `en`).
+          patterns:
+            type: array
+            description: Regex patterns (Presidio `PatternRecognizer`).
+            items:
+              type: object
+              additionalProperties: true
+              properties:
+                name:
+                  type: string
+                regex:
+                  type: string
+                score:
+                  type: number
+          denyList:
+            type: array
+            description: Exact deny-list terms (Presidio deny-list recognizer).
+            items:
+              type: string
+          context:
+            type: array
+            description: Context words that boost weak-pattern confidence.
+            items:
+              type: string
 
     # ----------------------------------------------------------------
     # Scan targeting / limits.
