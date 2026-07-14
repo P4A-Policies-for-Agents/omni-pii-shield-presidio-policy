@@ -30,6 +30,88 @@ omni-pii-shield-presidio-policy/
     └── tests/              # host-side pipeline integration tests
 ```
 
+## Purpose
+
+Omni Gateway is the governance control point for agentic traffic — **MCP** `tools/call`
+requests, **A2A** agent-to-agent messages, **LLM** completions, and plain REST APIs
+all cross it. That traffic is exactly where PII leaks happen today, and there is no
+first-party enforcement point for it:
+
+- An agent stuffs a customer email thread — names, phone numbers, IBANs — into the
+  `params.arguments` of an MCP `tools/call`, and it flows straight into a third-party
+  tool or an LLM prompt.
+- An orchestrating agent delegates a task to a **remote** A2A agent, passing the user's
+  raw conversation as `message.parts[]` — free text crossing an organizational trust
+  boundary uninspected — and the remote agent's task artifacts stream PII right back.
+- A backend or MCP tool result echoes PII into an agent's context window, from which it
+  can be re-emitted anywhere.
+- Compliance teams (GDPR, HIPAA, PCI-DSS) have no single choke point; PII handling is
+  left to each upstream service's discipline.
+
+Regex-only header/body filters miss names, locations, and context-dependent entities.
+[Presidio](https://github.com/data-privacy-stack/presidio) already solves *detection* —
+a context-aware engine combining NER models, regex, checksum validators, deny-lists, and
+context-word scoring, shipped as two small Dockerized REST services (Analyzer +
+Anonymizer). The missing piece is the **glue at the gateway**: a policy that classifies
+the traffic, extracts the right text fields, calls Presidio, and enforces an
+operator-configured posture. That glue is this policy.
+
+## Goal
+
+Turn a best-in-class open-source PII engine into a one-click, protocol-aware Anypoint
+policy that gives operators a **single, uniform PII boundary** across every asset type
+Omni Gateway fronts. Concretely:
+
+- **Detect, redact, or block PII in-flight** — on requests before they reach an LLM, MCP
+  server, A2A agent, or backend API, and on responses before they reach the caller — so
+  no PII bytes cross the boundary once a rule says they shouldn't.
+- **Be protocol-aware, not payload-blind** — understand MCP, A2A (V1 + Legacy bindings,
+  including SSE streaming), and LLM shapes so only the right text leaves are scanned and
+  structure/ordering is preserved byte-faithful.
+- **Safe-by-default rollout** — start in `audit` (observe only), then tighten to
+  `redact`/`block` per entity, per asset type, per direction, per caller identity,
+  without redeploying Presidio.
+- **Compose, don't replace** — sit alongside contracts, auth, and the existing
+  agent-governance policy family on the same API instance.
+
+## Business benefits
+
+| Benefit | How the policy delivers it |
+|---|---|
+| **Reduce compliance risk** | A single, auditable enforcement point for GDPR / HIPAA / PCI-DSS / CCPA data-handling obligations, instead of trusting every upstream service. |
+| **Prevent data exfiltration to third parties** | Sanitizes payloads before they reach external LLMs, SaaS MCP tools, and remote A2A agents — the trust boundaries where leaks are hardest to control. |
+| **Faster, safer AI adoption** | Teams can wire agents to external models and tools sooner, because the gateway guarantees PII never leaves unmasked. |
+| **Centralized policy, zero app changes** | Detection/redaction rules live at the gateway; upstream apps and agents need no code changes. |
+| **Tunable without rebuilds** | Entities, thresholds, allow-lists, context words, and org-specific ad-hoc recognizers (employee IDs, contract numbers) are configured in policy — no Presidio image rebuild. |
+| **Audit-ready evidence** | Every leg emits `X-PII-*` headers and a structured `pii-shield-evt` log line, feeding SIEM/observability for proof of enforcement. |
+| **Cost control** | Open-source Presidio + self-hosted deployment means no per-call SaaS PII-scanning fees. |
+
+## Real-world use cases
+
+- **Agent → external LLM guardrail.** A support-copilot agent sends conversation history
+  to a hosted LLM. The policy hashes `EMAIL_ADDRESS`/`PHONE_NUMBER` and blocks
+  `CREDIT_CARD` on the request leg, so the model never sees raw customer PII.
+- **Cross-org A2A delegation.** An orchestrator hands a task to a partner's A2A agent.
+  `PERSON`, `LOCATION`, and `PHONE_NUMBER` are redacted on `a2a` `request` traffic (data
+  leaving the org) while merely audited on internal `mcp` traffic — one build, two
+  postures.
+- **Third-party MCP tool call.** An agent invokes a SaaS MCP tool via `tools/call`. PII
+  in `params.arguments` is redacted before it leaves; PII echoed back in
+  `result.content[*].text` is caught on the response leg before it re-enters the agent's
+  context.
+- **Regulated API fail-closed.** A healthcare API instance sets `failurePosture: closed`
+  so that if Presidio is unreachable, traffic is rejected rather than passed unscanned —
+  "unscanned" is unacceptable for PHI.
+- **Identity-aware disclosure.** Callers holding the `pii.read` scope get emails passed
+  through (audit only); everyone else gets them hashed — enforced from the Anypoint
+  `Authentication` injectable, never by parsing raw tokens.
+- **Observability-only baseline.** Empty `rules` + `defaultAction: audit` deploys a
+  pass-through sensor that reports *where* PII is flowing across MCP/A2A/LLM/APIs before
+  any team commits to enforcement.
+- **Streaming response redaction.** For SSE `message/stream` / `SendStreamingMessage`
+  responses, each `status-update` / `artifact-update` frame is scanned and rewritten per
+  event, so PII is masked before each frame leaves the gateway.
+
 ## What it does
 
 Per inspected leg the policy:
