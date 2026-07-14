@@ -1,7 +1,7 @@
 # Copyright 2026 Salesforce, Inc. All rights reserved.
 [package]
 name = "pii_shield_presidio_policy"
-version = "0.1.0"
+version = "0.2.0"
 rust-version = "1.88.0"
 edition = "2021"
 
@@ -9,7 +9,7 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [package.metadata.anypoint]
-group_id = "TODO_GROUP_ID"
+group_id = "82a0453b-22e6-430d-bbf4-35b989d043dc"
 # The Anypoint Exchange CLI rejects asset ids whose hyphen-separated
 # segments mix letters and digits, so keep every segment purely alphabetic.
 definition_asset_id = "pii-shield-presidio-policy"

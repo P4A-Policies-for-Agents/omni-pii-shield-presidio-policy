@@ -15,8 +15,11 @@ spec:
         # `make run` patches name/namespace to the built policy ref.
         name: pii-shield-presidio-policy-impl
       config:
-        analyzerUrl: http://presidio-analyzer:3000
-        anonymizerUrl: http://presidio-anonymizer:3000
+        # Presidio services hosted on Railway. Redaction defaults to local
+        # splicing from analyzer offsets; set operator.serverSide: true on a
+        # rule to delegate that rewrite to the Anonymizer instead.
+        analyzerUrl: https://presidio-railway-production.up.railway.app
+        anonymizerUrl: https://presidio-railway-anonymizer-production.up.railway.app
         # Safe-by-default rollout: observe everywhere, redact emails +
         # phone numbers, block payment data outright.
         defaultAction: audit

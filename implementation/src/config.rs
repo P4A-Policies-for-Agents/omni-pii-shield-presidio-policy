@@ -230,6 +230,10 @@ pub struct PolicyConfig {
     /// `format: service` handle); used for logging and error text.
     pub analyzer_url: String,
     pub anonymizer_url: Option<String>,
+    /// Managed-gateway loopback prefix prepended to `/analyze` (empty = direct).
+    pub analyzer_path_prefix: String,
+    /// Managed-gateway loopback prefix prepended to `/anonymize` (empty = direct).
+    pub anonymizer_path_prefix: String,
     /// Empty = all asset types.
     pub asset_types: Vec<AssetType>,
     pub direction: DirectionScope,
@@ -307,9 +311,18 @@ impl PolicyConfig {
             rules.push(parse_rule(rule)?);
         }
 
+        let normalize_prefix = |s: Option<&String>| -> String {
+            s.map(|p| p.trim().trim_end_matches('/').to_string())
+                .filter(|p| !p.is_empty())
+                .map(|p| if p.starts_with('/') { p } else { format!("/{p}") })
+                .unwrap_or_default()
+        };
+
         Ok(PolicyConfig {
             analyzer_url,
             anonymizer_url,
+            analyzer_path_prefix: normalize_prefix(raw.analyzer_path_prefix.as_ref()),
+            anonymizer_path_prefix: normalize_prefix(raw.anonymizer_path_prefix.as_ref()),
             asset_types,
             direction,
             scan_data_parts: raw.scan_data_parts.unwrap_or(false),

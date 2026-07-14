@@ -481,6 +481,7 @@ async fn apply_redactions(
             match presidio::anonymize_remote(
                 client,
                 anonymizer.unwrap(),
+                &cfg.anonymizer_path_prefix,
                 cfg.presidio_timeout_ms,
                 &field.text,
                 &fr.redactions,

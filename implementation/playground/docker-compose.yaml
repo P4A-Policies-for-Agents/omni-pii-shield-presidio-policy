@@ -1,13 +1,19 @@
-# Local playground: Omni/Flex Gateway in front of a JSON backend, with a
-# co-deployed Presidio Analyzer (+ Anonymizer) sidecar the policy calls.
+# Local playground: Omni/Flex Gateway in front of a JSON backend. The policy
+# calls a Presidio Analyzer over the public internet (Railway-hosted), so no
+# local Presidio sidecar is needed.
 #
 #   caller ──► flex-gateway :8081 ──► backend (httpbin)
 #                    │
-#                    └── POST http://presidio-analyzer:3000/analyze
-#                    └── POST http://presidio-anonymizer:3000/anonymize
+#                    └── POST https://presidio-railway-production.up.railway.app/analyze
 #
 # `make run` copies the built policy into ./config/custom-policies and
 # boots this stack. Point your MCP / A2A / LLM client at :8081.
+#
+# To run Presidio locally instead, add back:
+#   presidio-analyzer:
+#     image: mcr.microsoft.com/presidio-analyzer:latest
+#     ports: ["5002:3000"]
+# and set analyzerUrl: http://presidio-analyzer:3000 in config/api.yaml.
 version: "3.8"
 
 services:
@@ -19,17 +25,6 @@ services:
       - ./config:/usr/local/share/mulesoft/flex-gateway/conf.d/
     depends_on:
       - backend
-      - presidio-analyzer
 
   backend:
     image: kennethreitz/httpbin
-
-  presidio-analyzer:
-    image: mcr.microsoft.com/presidio-analyzer:latest
-    ports:
-      - "5002:3000"
-
-  presidio-anonymizer:
-    image: mcr.microsoft.com/presidio-anonymizer:latest
-    ports:
-      - "5001:3000"

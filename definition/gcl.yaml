@@ -4,20 +4,15 @@ kind: Extension
 metadata:
   labels:
     title: PII Shield via Presidio
-    description: |
-      Detects, redacts, or blocks PII in-flight by delegating detection and
-      anonymization to a co-deployed Presidio Analyzer/Anonymizer service.
-      Protocol-aware across the agentic asset types Omni Gateway governs —
-      MCP `tools/call`, A2A message/task traffic (V1 + Legacy bindings,
-      including SSE streaming), and LLM completions — plus generic JSON APIs.
-      Ordered first-match rules bind detected entity types to an action
-      (`audit`, `redact`, `block`) with an optional Anypoint-identity
-      audience filter. Empty ruleset with `defaultAction: audit` is an
-      observability-only, pass-through deployment.
+    description: >-
+      Protocol-aware PII control for Omni Gateway. Delegates detection and
+      anonymization to a co-deployed Presidio service across MCP, A2A, LLM,
+      and generic JSON. Rules audit, redact, or block entities, with an
+      optional Anypoint identity audience filter.
     category: Security
     metadata/interfaceScope: api,resource
     metadata/capabilities/injectionPoint: inbound
-    metadata/capabilities/assetTypes: mcp,a2a,llm,api
+    metadata/capabilities/assetTypes: mcp,a2a,llm,http
 spec:
   extends:
     - name: extension-definition
@@ -40,6 +35,22 @@ spec:
         Base URL of the Presidio Anonymizer service. Required only when a
         `redact` rule sets `operator.serverSide: true`; otherwise redaction
         is spliced locally from analyzer offsets (no second round trip).
+    analyzerPathPrefix:
+      type: string
+      default: ""
+      description: |
+        Managed-gateway loopback prefix. When set (e.g.
+        `/presidio-analyzer-pin`), point `analyzerUrl` at the gateway's own
+        internal listener (`http://127.0.0.1:8081`); this prefix is prepended
+        to `/analyze` so the call re-enters through a same-gateway passthrough
+        route whose `auto_host_rewrite` restores the real Presidio `Host`.
+        Works around managed Omni gateways mangling the egress `Host` on
+        policy-originated calls. Leave empty for a direct call on self-managed
+        gateways.
+    anonymizerPathPrefix:
+      type: string
+      default: ""
+      description: Loopback prefix for the Anonymizer service (see analyzerPathPrefix).
 
     # ----------------------------------------------------------------
     # Traffic scoping.

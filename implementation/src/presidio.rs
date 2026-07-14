@@ -70,7 +70,18 @@ pub fn parse_analyze_response(
         .collect())
 }
 
-/// Call `POST {analyzer}/analyze` for a single text.
+/// Join a managed-gateway loopback prefix (already normalized to a
+/// leading-slash, no-trailing-slash form, or empty) with an endpoint like
+/// `/analyze`. Empty prefix yields the bare endpoint (direct call).
+fn endpoint_path(prefix: &str, endpoint: &str) -> String {
+    if prefix.is_empty() {
+        endpoint.to_string()
+    } else {
+        format!("{prefix}{endpoint}")
+    }
+}
+
+/// Call `POST {analyzer}{prefix}/analyze` for a single text.
 pub async fn analyze(
     client: &HttpClient,
     service: &Service,
@@ -85,9 +96,10 @@ pub async fn analyze(
         ("content-type", "application/json"),
         ("accept", "application/json"),
     ];
+    let path = endpoint_path(&cfg.analyzer_path_prefix, "/analyze");
     let response = client
         .request(service)
-        .path("/analyze")
+        .path(path.as_str())
         .timeout(Duration::from_millis(cfg.presidio_timeout_ms))
         .headers(headers)
         .body(&body)
@@ -169,6 +181,7 @@ pub fn parse_anonymize_response(bytes: &[u8]) -> Result<String, PresidioError> {
 pub async fn anonymize_remote(
     client: &HttpClient,
     service: &Service,
+    path_prefix: &str,
     timeout_ms: u64,
     text: &str,
     redactions: &[(RecognizerResult, Operator)],
@@ -181,9 +194,10 @@ pub async fn anonymize_remote(
         ("content-type", "application/json"),
         ("accept", "application/json"),
     ];
+    let path = endpoint_path(path_prefix, "/anonymize");
     let response = client
         .request(service)
-        .path("/anonymize")
+        .path(path.as_str())
         .timeout(Duration::from_millis(timeout_ms))
         .headers(headers)
         .body(&body)

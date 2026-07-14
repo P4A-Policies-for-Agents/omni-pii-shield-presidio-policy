@@ -1,0 +1,17 @@
+{
+  "analyzerUrl": "http://127.0.0.1:8081",
+  "analyzerPathPrefix": "/presidio-analyzer-pin",
+  "assetTypes": ["mcp"],
+  "direction": "both",
+  "language": "en",
+  "scoreThreshold": 0.5,
+  "defaultAction": "audit",
+  "failurePosture": "open",
+  "presidioTimeoutMs": 3000,
+  "rules": [
+    { "entityType": "CREDIT_CARD", "action": "block" },
+    { "entityType": "US_SSN", "action": "redact", "operator": { "kind": "replace", "newValue": "<US_SSN>" } },
+    { "entityType": "EMAIL_ADDRESS", "action": "redact", "operator": { "kind": "replace", "newValue": "<EMAIL_ADDRESS>" } },
+    { "entityType": "PHONE_NUMBER", "action": "redact", "operator": { "kind": "mask", "maskingChar": "*", "charsToMask": 6, "fromEnd": true } }
+  ]
+}

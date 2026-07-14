@@ -48,6 +48,10 @@ pub struct Config {
         deserialize_with = "pdk::serde::deserialize_service_opt"
     )]
     pub anonymizer_url: Option<pdk::hl::Service>,
+    #[serde(alias = "analyzerPathPrefix", default)]
+    pub analyzer_path_prefix: Option<String>,
+    #[serde(alias = "anonymizerPathPrefix", default)]
+    pub anonymizer_path_prefix: Option<String>,
     #[serde(alias = "assetTypes", default)]
     pub asset_types: Vec<String>,
     #[serde(alias = "direction", default)]
