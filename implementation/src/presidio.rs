@@ -90,9 +90,10 @@ pub async fn analyze(
 ) -> Result<Vec<RecognizerResult>, PresidioError> {
     let body = serde_json::to_vec(&build_analyze_body(cfg, text))
         .map_err(|e| PresidioError::BadPayload(e.to_string()))?;
-    let authority = service.uri().authority().to_string();
+    // Do not set `host`/`:authority` — the `Service` already carries the
+    // configured authority, and on a managed gateway egress reconciles it
+    // regardless. This matches the PDK reference policies (e.g. ai-semantic-cache).
     let headers = vec![
-        ("host", authority.as_str()),
         ("content-type", "application/json"),
         ("accept", "application/json"),
     ];
@@ -188,9 +189,9 @@ pub async fn anonymize_remote(
 ) -> Result<String, PresidioError> {
     let body = serde_json::to_vec(&build_anonymize_body(text, redactions))
         .map_err(|e| PresidioError::BadPayload(e.to_string()))?;
-    let authority = service.uri().authority().to_string();
+    // See `analyze`: no manual `host` header — the `Service` supplies the
+    // authority and the gateway reconciles egress.
     let headers = vec![
-        ("host", authority.as_str()),
         ("content-type", "application/json"),
         ("accept", "application/json"),
     ];
