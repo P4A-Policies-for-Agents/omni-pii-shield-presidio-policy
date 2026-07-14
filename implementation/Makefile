@@ -1,8 +1,19 @@
 TARGET                	:= wasm32-wasip1
 TARGET_DIR            	:= target/$(TARGET)/release
 POLICY_REF_NAME_SUFFIX 	:= -impl
-DEFINITION_NAME        	= $(shell anypoint-cli-v4 pdk policy-project definition get gcl-metadata-name)
-DEFINITION_NAMESPACE   	= $(shell anypoint-cli-v4 pdk policy-project definition get gcl-metadata-namespace)
+# The definition's GCL metadata name is derived by the publish tooling as
+# "<definition-asset-id>-v<major>-<minor>". We compute it deterministically
+# instead of `pdk policy-project definition get gcl-metadata-{name,namespace}`:
+# that command resolves the definition through the `.project.yaml` filesystem
+# ref (`../definition`), which does NOT exist in the P4A split-model build
+# (definition + implementation are cloned into separate dirs), so on the worker
+# the CLI falls back to a stringified object ("[object Object]-v0-2") and breaks
+# `gcl-gen`'s arg parser. Keep DEFINITION_ASSET_ID in sync with
+# definition/exchange.json `assetId` and Cargo.toml `definition_asset_id.name`.
+DEFINITION_ASSET_ID    	:= pii-shield-presidio-policy
+CRATE_VERSION          	= $(shell cargo anypoint get-version)
+DEFINITION_NAME        	= $(DEFINITION_ASSET_ID)-v$(word 1,$(subst ., ,$(CRATE_VERSION)))-$(word 2,$(subst ., ,$(CRATE_VERSION)))
+DEFINITION_NAMESPACE   	:= default
 DEFINITION_SRC_GCL_PATH = $(shell anypoint-cli-v4 pdk policy-project locate-gcl definition-src)
 DEFINITION_GCL_PATH    	= $(shell anypoint-cli-v4 pdk policy-project locate-gcl definition)
 CRATE_NAME             	= $(shell cargo anypoint get-name)
