@@ -12,6 +12,20 @@ completions — plus generic JSON APIs.
 Built with the Policy Development Kit (PDK) **1.9.0**, Rust →
 `wasm32-wasip1`, split-model project (definition + flex implementation).
 
+> [!IMPORTANT]
+> **⚠️ MANDATORY on a managed Omni Gateway — Presidio on a `Host`-routed edge (Railway/Vercel/…).**
+>
+> If Presidio runs on a multi-tenant edge platform that routes by the HTTP `Host` header / TLS SNI — **Railway, Vercel, Render, Heroku, Cloudflare Pages/Workers, Fly.io, Netlify** — then on a **managed** Omni Gateway (e.g. Anypoint CloudHub 2.0) the gateway rewrites the egress `Host` to an internal Envoy cluster name and the platform rejects the call (`404`/`502`).
+>
+> **You MUST route the callout through a same-gateway loopback "pin":**
+> 1. Set **`analyzerUrl`** (and **`anonymizerUrl`**) = `http://127.0.0.1:8081` (the gateway's own internal listener).
+> 2. Set **`analyzerPathPrefix`** = `/presidio-analyzer-pin` (and **`anonymizerPathPrefix`** = `/presidio-anonymizer-pin`).
+> 3. Create a plain passthrough route per service on the **same** gateway at those prefixes, upstream = the real Railway/edge URL, with **`auto_host_rewrite`** so the correct `Host` is restored on egress.
+>
+> Without the pin the policy **cannot reach Presidio** on a managed gateway. Full recipe: [Deployment shape](#deployment-shape). The same pin applies to any of the edge platforms listed above.
+>
+> **Self-managed / connected Flex Gateway**, or a dedicated single-tenant host (fixed VM, static-IP load balancer, its own domain): leave the prefixes empty for a direct call.
+
 ```
 omni-pii-shield-presidio-policy/
 ├── definition/            # gcl.yaml + exchange.json + Makefile  (Exchange asset)
